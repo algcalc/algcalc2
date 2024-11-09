@@ -1,0 +1,36 @@
+[package]
+authors = ["lemonsh <lemon@lemonsh.moe>"]
+name = "firmware"
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+cortex-m = "0.7.7"
+cortex-m-rt = "0.7.5"
+defmt = "0.3.8"
+defmt-rtt = "0.4.1"
+embedded-hal = "1.0.0"
+embedded-hal-bus = "0.2.0"
+panic-probe = { version = "0.3.2", features = ["print-defmt"] }
+rp-pico = "0.9.0"
+epd-waveshare = "0.6.0"
+embedded-graphics = "0.8.1"
+portable-atomic = { version = "1.3.3", features = ["critical-section"] }
+os = { git = "https://github.com/algcalc/os", default-features = false, features = ["defmt"] }
+
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 'z'
+overflow-checks = true
+
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 3
+overflow-checks = false

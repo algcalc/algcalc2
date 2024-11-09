@@ -1,0 +1,12 @@
+[package]
+name = "os"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+defmt = { version = "0.3.8", optional = true }
+embedded-graphics = "0.8.1"
+tracing = { version = "0.1.40", optional = true }
+
+[features]
+default = ["tracing"]

@@ -1,0 +1,7 @@
+{
+    // fix "can't find crate for `test`"
+    "rust-analyzer.checkOnSave.allTargets": false,
+    "rust-analyzer.checkOnSave.extraArgs": [
+        "--bins"
+    ]
+}
