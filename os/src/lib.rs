@@ -2,13 +2,14 @@
 
 use crate::hardware::{Hardware, KeypadDriver};
 use embedded_graphics::draw_target::DrawTarget;
+use epd_waveshare::color::Color;
 
-mod hardware;
+pub mod hardware;
 mod log;
 
-pub fn run<D, KB>(mut hw: Hardware<D, KB>)
+pub fn run<D, KB>(hw: Hardware<D, KB>)
 where
-    D: DrawTarget,
+    D: DrawTarget<Color = Color>,
     KB: KeypadDriver
 {
 

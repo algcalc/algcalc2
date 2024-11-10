@@ -1,11 +1,11 @@
 #![no_std]
 #![no_main]
 
+mod hardware;
+
 use bsp::entry;
 use defmt::info;
-use defmt_rtt as _;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use panic_probe as _;
 
 use rp_pico::{
 	self as bsp,
@@ -20,11 +20,11 @@ use bsp::hal::{
 	watchdog::Watchdog,
 };
 
-use embedded_graphics::{
-	prelude::*,
-	primitives::{Line, PrimitiveStyle},
-};
-use epd_waveshare::{epd2in9_v2::*, prelude::*};
+use crate::hardware::Display;
+use embedded_graphics::prelude::*;
+use epd_waveshare::epd2in9_v2::{Display2in9, Epd2in9};
+use epd_waveshare::prelude::WaveshareDisplay;
+use os::hardware::{DisplayDriver, Hardware};
 
 #[entry]
 fn main() -> ! {
@@ -90,18 +90,18 @@ fn main() -> ! {
 	let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 	let mut spi = ExclusiveDevice::new(spi, cs, timer.clone()).unwrap();
 
-	let mut epd = Epd2in9::new(&mut spi, busy_in, dc, rst, &mut timer, None).unwrap();
-	let mut display = Display2in9::default();
+	let epd = Epd2in9::new(&mut spi, busy_in, dc, rst, &mut timer, None).unwrap();
+	let display = Display {
+		epd,
+		fb: Display2in9::default()
+	};
 
-	let _ = Line::new(Point::new(10, 50), Point::new(10, 100))
-		.into_styled(PrimitiveStyle::with_stroke(Color::Black, 5))
-		.draw(&mut display);
+	let hw = Hardware {
+		display,
+		keypad: todo!()
+	};
 
-	epd.update_frame(&mut spi, &display.buffer(), &mut timer)
-		.unwrap();
-	epd.display_frame(&mut spi, &mut timer).unwrap();
-
-	epd.sleep(&mut spi, &mut timer).unwrap();
+	os::run(hw);
 
 	loop {}
 }
