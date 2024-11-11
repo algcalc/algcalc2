@@ -9,7 +9,7 @@ embedded-graphics = "0.8.1"
 tracing = { version = "0.1.40", optional = true }
 
 # for https://docs.rs/epd-waveshare/latest/epd_waveshare/color/enum.Color.html
-epd-waveshare = { version = "0.6.0", default-features = false, features = ["epd2in13_v3"] }
+epd-waveshare = { version = "0.6.0", default-features = false, features = ["epd2in13_v3", "graphics"] }
 
 [features]
 default = ["tracing"]

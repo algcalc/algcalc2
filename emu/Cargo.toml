@@ -1,0 +1,12 @@
+[package]
+name = "emu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+color-eyre = { version = "0.6.3", default-features = false, features = ["track-caller"] }
+embedded-graphics = "0.8.1"
+embedded-graphics-simulator = "0.7.0"
+os = { path = "../os" }
+tracing-subscriber = "0.3.18"
+sdl2 = { version = "0.37", features = ["bundled"] }
