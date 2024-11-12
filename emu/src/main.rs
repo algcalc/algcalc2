@@ -17,8 +17,6 @@ use os::{
 	Color,
 };
 
-mod mockhw;
-
 struct Keypad(mpsc::Receiver<Key>);
 
 impl KeypadDriver for Keypad {

@@ -5,8 +5,11 @@ mod hardware;
 
 use bsp::entry;
 use defmt::info;
+use defmt_rtt as _;
 use embedded_hal_bus::spi::ExclusiveDevice;
+use panic_probe as _;
 
+use hardware::Keypad;
 use rp_pico::{
 	self as bsp,
 	hal::{self, Timer},
@@ -21,10 +24,11 @@ use bsp::hal::{
 };
 
 use crate::hardware::Display;
-use embedded_graphics::prelude::*;
-use epd_waveshare::epd2in9_v2::{Display2in9, Epd2in9};
-use epd_waveshare::prelude::WaveshareDisplay;
-use os::hardware::{DisplayDriver, Hardware};
+use epd_waveshare::{
+	epd2in9_v2::{Display2in9, Epd2in9},
+	prelude::WaveshareDisplay,
+};
+use os::hardware::Hardware;
 
 #[entry]
 fn main() -> ! {
@@ -93,15 +97,12 @@ fn main() -> ! {
 	let epd = Epd2in9::new(&mut spi, busy_in, dc, rst, &mut timer, None).unwrap();
 	let display = Display {
 		epd,
-		fb: Display2in9::default()
+		fb: Display2in9::default(),
 	};
 
-	let hw = Hardware {
-		display,
-		keypad: todo!()
-	};
+	let keypad = Keypad {};
 
-	os::run(hw);
+	let hw = Hardware { display, keypad };
 
-	loop {}
+	os::run(hw)
 }

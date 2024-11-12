@@ -1,6 +1,7 @@
 use core::time::Duration;
 
 use embedded_graphics::draw_target::DrawTarget;
+use epd_waveshare::color::Color;
 
 pub struct Hardware<D, KB> {
 	pub display: D,
@@ -38,6 +39,6 @@ pub enum Key {
 	Dot,
 }
 
-pub trait DisplayDriver: DrawTarget {
+pub trait DisplayDriver: DrawTarget<Color = Color> {
 	fn update(&mut self);
 }

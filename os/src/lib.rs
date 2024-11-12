@@ -4,7 +4,6 @@ use core::time::Duration;
 
 use crate::hardware::{Hardware, KeypadDriver};
 use embedded_graphics::{
-	draw_target::DrawTarget,
 	prelude::{Point, Primitive},
 	primitives::{Line, PrimitiveStyle},
 	Drawable,
@@ -17,7 +16,7 @@ mod log;
 
 pub fn run<D, KB>(mut hw: Hardware<D, KB>) -> !
 where
-	D: DrawTarget<Color = Color> + DisplayDriver,
+	D: DisplayDriver,
 	KB: KeypadDriver,
 {
 	let _ = Line::new(Point::new(10, 50), Point::new(10, 100))

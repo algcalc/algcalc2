@@ -1,20 +1,23 @@
 use core::convert::Infallible;
 use embedded_graphics::{
-	draw_target::DrawTarget, geometry::Dimensions, pixelcolor::BinaryColor, primitives::Rectangle,
-	Pixel,
+	draw_target::DrawTarget, geometry::Dimensions, primitives::Rectangle, Pixel,
 };
 use embedded_hal::{
 	delay::DelayNs,
 	digital::{InputPin, OutputPin},
 	spi::SpiDevice,
 };
-use epd_waveshare::color::Color;
-use epd_waveshare::epd2in9_v2::{Display2in9, Epd2in9};
-use os::hardware::DisplayDriver;
+use epd_waveshare::{
+	color::Color,
+	epd2in9_v2::{Display2in9, Epd2in9},
+};
+use os::hardware::{DisplayDriver, KeypadDriver};
 
-pub struct Display<SPI, BUSY, DC, RST, DELAY> {
-	pub epd: Epd2in9<SPI, BUSY, DC, RST, DELAY>,
-	pub fb: Display2in9,
+// DISPLAY
+
+pub(crate) struct Display<SPI, BUSY, DC, RST, DELAY> {
+	pub(crate) epd: Epd2in9<SPI, BUSY, DC, RST, DELAY>,
+	pub(crate) fb: Display2in9,
 }
 
 impl<SPI, BUSY, DC, RST, DELAY> DrawTarget for Display<SPI, BUSY, DC, RST, DELAY> {
@@ -43,5 +46,17 @@ where
 	RST: OutputPin,
 	DELAY: DelayNs,
 {
-	fn update(&mut self) {}
+	fn update(&mut self) {
+		
+	}
+}
+
+// KEYPAD
+
+pub(crate) struct Keypad {}
+
+impl KeypadDriver for Keypad {
+	fn read_key(&mut self, timeout: core::time::Duration) -> Option<os::hardware::Key> {
+		None
+	}
 }
