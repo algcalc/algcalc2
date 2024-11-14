@@ -6,10 +6,11 @@ mod hardware;
 use bsp::entry;
 use defmt::info;
 use defmt_rtt as _;
+use embedded_hal::digital::OutputPin;
 use embedded_hal_bus::spi::ExclusiveDevice;
+use hardware::Keypad;
 use panic_probe as _;
 
-use hardware::Keypad;
 use rp_pico::{
 	self as bsp,
 	hal::{self, Timer},
@@ -26,9 +27,11 @@ use bsp::hal::{
 use crate::hardware::Display;
 use epd_waveshare::{
 	epd2in9_v2::{Display2in9, Epd2in9},
-	prelude::WaveshareDisplay,
+	prelude::{DisplayRotation, WaveshareDisplay},
 };
 use os::hardware::Hardware;
+
+const RAM_BEGIN: u32 = 0x20040000;
 
 #[entry]
 fn main() -> ! {
@@ -59,10 +62,9 @@ fn main() -> ! {
 		&mut pac.RESETS,
 	);
 
-	let _led_pin = pins.led.into_push_pull_output();
+ 	pins.led.into_push_pull_output().set_high().unwrap();
 
 	let spi_mosi = pins.gpio11.into_function::<hal::gpio::FunctionSpi>();
-	/* let spi_miso = pins.gpio12.into_function::<hal::gpio::FunctionSpi>(); */
 	let spi_sclk = pins.gpio10.into_function::<hal::gpio::FunctionSpi>();
 	let spi = hal::spi::Spi::<_, _, _, 8>::new(pac.SPI1, (spi_mosi, spi_sclk));
 
@@ -70,7 +72,7 @@ fn main() -> ! {
 	let spi = spi.init(
 		&mut pac.RESETS,
 		clocks.peripheral_clock.freq(),
-		8.MHz(),
+		16.MHz(),
 		embedded_hal::spi::MODE_0,
 	);
 
@@ -95,12 +97,22 @@ fn main() -> ! {
 	let mut spi = ExclusiveDevice::new(spi, cs, timer.clone()).unwrap();
 
 	let epd = Epd2in9::new(&mut spi, busy_in, dc, rst, &mut timer, None).unwrap();
+	let mut fb = Display2in9::default();
+	fb.set_rotation(DisplayRotation::Rotate90);
 	let display = Display {
 		epd,
-		fb: Display2in9::default(),
+		spi,
+		delay: timer.clone(),
+		fb,
 	};
 
-	let keypad = Keypad {};
+	let keypad = Keypad::new(
+		[pins.gpio22.into_pull_down_input().into_dyn_pin(), pins.gpio21.into_pull_down_input().into_dyn_pin(), pins.gpio20.into_pull_down_input().into_dyn_pin(), pins.gpio19.into_pull_down_input().into_dyn_pin(), pins.gpio18.into_pull_down_input().into_dyn_pin()],
+		[pins.gpio14.into_push_pull_output().into_dyn_pin(),	pins.gpio15.into_push_pull_output().into_dyn_pin(), pins.gpio16.into_push_pull_output().into_dyn_pin(), pins.gpio17.into_push_pull_output().into_dyn_pin()],
+		timer,
+	);
+
+	info!("{}", RAM_BEGIN-cortex_m::register::msp::read());
 
 	let hw = Hardware { display, keypad };
 

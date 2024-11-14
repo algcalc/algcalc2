@@ -2,7 +2,7 @@ use std::{
 	convert::Infallible,
 	process,
 	sync::{mpsc, RwLock},
-	thread,
+	thread, time::Duration,
 };
 
 use embedded_graphics::{
@@ -21,8 +21,8 @@ use sdl2::{keyboard::{Keycode, Mod}, sys::KeyCode};
 struct Keypad(mpsc::Receiver<Key>);
 
 impl KeypadDriver for Keypad {
-	fn read_key(&mut self, timeout: std::time::Duration) -> Option<os::hardware::Key> {
-		self.0.recv_timeout(timeout).ok()
+	fn read_key(&mut self, timeout: u64) -> Option<os::hardware::Key> {
+		self.0.recv_timeout(Duration::from_millis(timeout)).ok()
 	}
 }
 
