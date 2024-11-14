@@ -9,13 +9,15 @@ pub struct Hardware<D, KB> {
 }
 
 pub trait KeypadDriver {
-	fn read_key(&mut self, timeout: Duration) -> Option<Key>;
+	fn read_key(&mut self, timeout: u64) -> Option<Key>;
 }
 
-// 7  8  9  F1 F2
-// 4  5  6  *  sq
-// 1  2  3  -  /
-// .  0  =  +  C
+// 7  8  9  BK .
+// 4  5  6  +  -
+// 1  2  3  *  /
+// <  0  >  =  Fn
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Key {
 	D0,
 	D1,
@@ -27,15 +29,15 @@ pub enum Key {
 	D7,
 	D8,
 	D9,
-	Fun1,
-	Fun2,
+	Left,
+	Right,
+	Backspace,
+	Fn,
 	Add,
 	Sub,
 	Mul,
 	Div,
-	Sqrt,
 	Eq,
-	Clear,
 	Dot,
 }
 
