@@ -1,15 +1,14 @@
-use core::time::Duration;
-
 use embedded_graphics::draw_target::DrawTarget;
 use epd_waveshare::color::Color;
 
-pub struct Hardware<D, KB> {
+pub struct Hardware<D, KB, SYS> {
 	pub display: D,
 	pub keypad: KB,
+	pub system: SYS
 }
 
 pub trait KeypadDriver {
-	fn read_key(&mut self, timeout: u64) -> Option<Key>;
+	fn read_key(&mut self, timeout_ms: u64) -> Option<Key>;
 }
 
 // 7  8  9  BK .
@@ -43,4 +42,9 @@ pub enum Key {
 
 pub trait DisplayDriver: DrawTarget<Color = Color> {
 	fn update(&mut self);
+}
+
+pub trait SystemDriver {
+	fn memory_used(&mut self) -> u64;
+	fn memory_total(&mut self) -> u64;
 }

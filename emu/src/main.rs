@@ -13,16 +13,18 @@ use embedded_graphics_simulator::{
 	BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
 };
 use os::{
-	hardware::{DisplayDriver, Hardware, Key, KeypadDriver},
+	hardware::{DisplayDriver, Hardware, Key, KeypadDriver, SystemDriver},
 	Color,
 };
-use sdl2::{keyboard::{Keycode, Mod}, sys::KeyCode};
+use rand::thread_rng;
+use rand::Rng;
+use sdl2::keyboard::Keycode;
 
 struct Keypad(mpsc::Receiver<Key>);
 
 impl KeypadDriver for Keypad {
-	fn read_key(&mut self, timeout: u64) -> Option<os::hardware::Key> {
-		self.0.recv_timeout(Duration::from_millis(timeout)).ok()
+	fn read_key(&mut self, timeout_ms: u64) -> Option<os::hardware::Key> {
+		self.0.recv_timeout(Duration::from_millis(timeout_ms)).ok()
 	}
 }
 
@@ -54,6 +56,20 @@ impl<'a> DisplayDriver for Display<'a> {
 	fn update(&mut self) {}
 }
 
+const FAKEMEM_TOTAL: u64 = 1024*1024;
+
+struct System;
+
+impl SystemDriver for System {
+	fn memory_used(&mut self) -> u64 {
+		thread_rng().gen_range(1024..FAKEMEM_TOTAL)
+	}
+
+	fn memory_total(&mut self) -> u64 {
+		FAKEMEM_TOTAL
+	}
+}
+
 fn main() {
 	tracing_subscriber::fmt::init();
 	
@@ -75,8 +91,10 @@ fn main() {
 		.build();
 	let mut win = Window::new("algcalc2 emulator", &output_settings);
 
+	let hw = Hardware { display, keypad, system: System };
+
 	thread::scope(|s| {
-		s.spawn(|| os::run(Hardware { display, keypad }));
+		s.spawn(|| os::run(hw));
 		loop {
 			win.update(&simulator.read().unwrap());
 			for event in win.events() {

@@ -10,18 +10,43 @@ use embedded_hal::{
 use epd_waveshare::{
 	color::Color,
 	epd2in9_v2::{Display2in9, Epd2in9},
-	prelude::WaveshareDisplay,
+	prelude::{DisplayRotation, WaveshareDisplay},
 };
-use os::hardware::{DisplayDriver, Key::{self, *}, KeypadDriver};
-use rp_pico::hal::{gpio::{DynPinId, FunctionSioInput, FunctionSioOutput, Pin, PullDown}, timer::Instant, Timer};
+use os::hardware::{DisplayDriver, Key, KeypadDriver, SystemDriver};
+use rp_pico::hal::{
+	gpio::{DynPinId, FunctionSioInput, FunctionSioOutput, Pin, PullDown},
+	timer::Instant,
+	Timer,
+};
 
 // DISPLAY
 
 pub(crate) struct Display<SPI, BUSY, DC, RST, DELAY> {
-	pub(crate) spi: SPI,
-	pub(crate) delay: DELAY,
-	pub(crate) epd: Epd2in9<SPI, BUSY, DC, RST, DELAY>,
-	pub(crate) fb: Display2in9,
+	spi: SPI,
+	delay: DELAY,
+	epd: Epd2in9<SPI, BUSY, DC, RST, DELAY>,
+	fb: Display2in9,
+}
+
+impl<SPI, BUSY, DC, RST, DELAY> Display<SPI, BUSY, DC, RST, DELAY>
+where
+	SPI: SpiDevice,
+	BUSY: InputPin,
+	DC: OutputPin,
+	RST: OutputPin,
+	DELAY: DelayNs,
+{
+	pub(crate) fn new(mut spi: SPI, busy: BUSY, dc: DC, rst: RST, mut delay: DELAY) -> Self {
+		let epd = Epd2in9::new(&mut spi, busy, dc, rst, &mut delay, None).unwrap();
+		let mut fb = Display2in9::default();
+		fb.set_rotation(DisplayRotation::Rotate90);
+		Self {
+			spi,
+			delay,
+			epd,
+			fb,
+		}
+	}
 }
 
 impl<SPI, BUSY, DC, RST, DELAY> DrawTarget for Display<SPI, BUSY, DC, RST, DELAY> {
@@ -58,17 +83,28 @@ where
 }
 
 // KEYPAD
-const DEBOUNCE_TIME: u64 = 50;
+
+const DEBOUNCE_TIME_MS: u64 = 50;
+const ROWS: usize = 4;
+const COLS: usize = 5;
 
 pub(crate) struct Keypad {
-	columns: [Pin<DynPinId, FunctionSioInput, PullDown>; 5],
-	rows: [Pin<DynPinId, FunctionSioOutput, PullDown>; 4],
+	columns: [Pin<DynPinId, FunctionSioInput, PullDown>; COLS],
+	rows: [Pin<DynPinId, FunctionSioOutput, PullDown>; ROWS],
 	timer: Timer,
-	last_pressed: [[Instant; 5]; 4],
+	last_pressed: [[Instant; COLS]; ROWS],
 }
 
 impl KeypadDriver for Keypad {
-	fn read_key(&mut self, timeout: u64) -> Option<Key> {
+	fn read_key(&mut self, timeout_ms: u64) -> Option<Key> {
+		use Key::*;
+		const KEYMAP: [[Key; COLS]; ROWS] = [
+			[D7, D8, D9, Backspace, Dot],
+			[D4, D5, D6, Add, Sub],
+			[D1, D2, D3, Mul, Div],
+			[Left, D0, Right, Eq, Fn],
+		];
+
 		let start = self.timer.get_counter();
 
 		loop {
@@ -76,45 +112,59 @@ impl KeypadDriver for Keypad {
 				row.set_high().unwrap();
 				for (i_col, column) in self.columns.iter_mut().enumerate() {
 					let now = self.timer.get_counter();
-					
+
 					if column.is_high().unwrap() {
 						let since_pressed = now - self.last_pressed[i_row][i_col];
 						self.last_pressed[i_row][i_col] = now;
-						
-						if since_pressed.to_millis() < DEBOUNCE_TIME {
+
+						if since_pressed.to_millis() < DEBOUNCE_TIME_MS {
 							continue;
 						}
 
 						row.set_low().unwrap();
-						return Some(KEYMAP[i_row][i_col])
+						return Some(KEYMAP[i_row][i_col]);
 					}
 				}
 				row.set_low().unwrap();
 			}
 
-			if (self.timer.get_counter() - start).to_millis() > timeout {
-				return None
+			if (self.timer.get_counter() - start).to_millis() > timeout_ms {
+				return None;
 			}
 		}
 	}
 }
 
 impl Keypad {
-	pub(crate) fn new(columns: [Pin<DynPinId, FunctionSioInput, PullDown>; 5], rows: [Pin<DynPinId, FunctionSioOutput, PullDown>; 4], timer: Timer) -> Self {
-		let now = timer.get_counter(); 
+	pub(crate) fn new(
+		columns: [Pin<DynPinId, FunctionSioInput, PullDown>; COLS],
+		rows: [Pin<DynPinId, FunctionSioOutput, PullDown>; ROWS],
+		timer: Timer,
+	) -> Self {
+		let now = timer.get_counter();
 
 		Self {
 			columns,
 			rows,
 			timer,
-			last_pressed: [[now; 5]; 4],
+			last_pressed: [[now; COLS]; ROWS],
 		}
 	}
 }
 
-const KEYMAP: [[Key; 5]; 4] = [
-	[D7, D8, D9, Backspace, Dot],
-	[D4, D5, D6, Add, Sub],
-	[D1, D2, D3, Mul, Div],
-	[Left, D0, Right, Eq, Fn],
-];
+// SYSTEM
+
+const RAM_BEGIN: u64 = 0x2004_0000;
+const RAM_END: u64 = 0x2000_0000;
+
+pub(crate) struct System;
+
+impl SystemDriver for System {
+	fn memory_used(&mut self) -> u64 {
+		RAM_BEGIN - cortex_m::register::msp::read() as u64
+	}
+
+	fn memory_total(&mut self) -> u64 {
+		RAM_BEGIN - RAM_END
+	}
+}

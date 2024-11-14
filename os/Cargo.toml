@@ -10,6 +10,7 @@ tracing = { version = "0.1.40", optional = true }
 
 # for https://docs.rs/epd-waveshare/latest/epd_waveshare/color/enum.Color.html
 epd-waveshare = { version = "0.6.0", default-features = false, features = ["epd2in13_v3", "graphics"] }
+arrayvec = { version = "0.7.6", default-features = false }
 
 [features]
 default = ["tracing"]
