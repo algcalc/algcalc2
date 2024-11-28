@@ -1,8 +1,10 @@
 use std::{
+	collections::VecDeque,
 	convert::Infallible,
 	process,
 	sync::{mpsc, RwLock},
-	thread, time::Duration,
+	thread,
+	time::Duration,
 };
 
 use embedded_graphics::{
@@ -16,15 +18,39 @@ use os::{
 	hardware::{DisplayDriver, Hardware, Key, KeypadDriver, SystemDriver},
 	Color,
 };
-use rand::thread_rng;
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use sdl2::keyboard::Keycode;
 
-struct Keypad(mpsc::Receiver<Key>);
+struct Keypad {
+	rx: mpsc::Receiver<Key>,
+	buf: VecDeque<Key>,
+}
+
+impl Keypad {
+	fn new(rx: mpsc::Receiver<Key>) -> Self {
+		Self {
+			rx,
+			buf: VecDeque::new(),
+		}
+	}
+}
 
 impl KeypadDriver for Keypad {
-	fn read_key(&mut self, timeout_ms: u64) -> Option<os::hardware::Key> {
-		self.0.recv_timeout(Duration::from_millis(timeout_ms)).ok()
+	fn read_key(&mut self) -> Option<os::hardware::Key> {
+		if let Some(key) = self.buf.pop_front() {
+			Some(key)
+		} else {
+			self.rx.try_recv().ok()
+		}
+	}
+
+	fn wait_for_key(&mut self, timeout_ms: u64) -> bool {
+		if let Ok(key) = self.rx.recv_timeout(Duration::from_millis(timeout_ms)) {
+			self.buf.push_back(key);
+			true
+		} else {
+			false
+		}
 	}
 }
 
@@ -33,7 +59,7 @@ struct Display<'a> {
 	bounding_box: Rectangle,
 }
 
-impl<'a> DrawTarget for Display<'a> {
+impl DrawTarget for Display<'_> {
 	type Color = os::Color;
 
 	type Error = Infallible;
@@ -46,17 +72,17 @@ impl<'a> DrawTarget for Display<'a> {
 	}
 }
 
-impl<'a> Dimensions for Display<'a> {
+impl Dimensions for Display<'_> {
 	fn bounding_box(&self) -> embedded_graphics::primitives::Rectangle {
 		self.bounding_box
 	}
 }
 
-impl<'a> DisplayDriver for Display<'a> {
+impl DisplayDriver for Display<'_> {
 	fn update(&mut self) {}
 }
 
-const FAKEMEM_TOTAL: u64 = 1024*1024;
+const FAKEMEM_TOTAL: u64 = 1024 * 1024;
 
 struct System;
 
@@ -72,9 +98,9 @@ impl SystemDriver for System {
 
 fn main() {
 	tracing_subscriber::fmt::init();
-	
+
 	let (key_tx, key_rx) = mpsc::channel();
-	let keypad = Keypad(key_rx);
+	let keypad = Keypad::new(key_rx);
 
 	let simulator = SimulatorDisplay::<Color>::new(Size::new(296, 128));
 	let bounding_box = simulator.bounding_box();
@@ -91,7 +117,11 @@ fn main() {
 		.build();
 	let mut win = Window::new("algcalc2 emulator", &output_settings);
 
-	let hw = Hardware { display, keypad, system: System };
+	let hw = Hardware {
+		display,
+		keypad,
+		system: System,
+	};
 
 	thread::scope(|s| {
 		s.spawn(|| os::run(hw));

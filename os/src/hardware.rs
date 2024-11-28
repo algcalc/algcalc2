@@ -4,18 +4,19 @@ use epd_waveshare::color::Color;
 pub struct Hardware<D, KB, SYS> {
 	pub display: D,
 	pub keypad: KB,
-	pub system: SYS
+	pub system: SYS,
 }
 
 pub trait KeypadDriver {
-	fn read_key(&mut self, timeout_ms: u64) -> Option<Key>;
+	fn read_key(&mut self) -> Option<Key>;
+	fn wait_for_key(&mut self, timeout_ms: u64) -> bool;
 }
 
 // 7  8  9  BK .
 // 4  5  6  +  -
 // 1  2  3  *  /
 // <  0  >  =  Fn
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Key {
 	D0,
@@ -42,6 +43,7 @@ pub enum Key {
 
 pub trait DisplayDriver: DrawTarget<Color = Color> {
 	fn update(&mut self);
+	fn refresh(&mut self) {}
 }
 
 pub trait SystemDriver {

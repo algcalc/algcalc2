@@ -1,7 +1,9 @@
 #![no_std]
 #![no_main]
 
+mod config;
 mod hardware;
+mod input_thread;
 
 use bsp::entry;
 use defmt::info;
@@ -9,11 +11,16 @@ use defmt_rtt as _;
 use embedded_hal::digital::OutputPin;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use hardware::Keypad;
+use input_thread::KeypadPins;
 use panic_probe as _;
 
 use rp_pico::{
 	self as bsp,
-	hal::{self, Timer},
+	hal::{
+		self,
+		multicore::{Multicore, Stack},
+		Timer,
+	},
 };
 
 use bsp::hal::{
@@ -26,12 +33,14 @@ use bsp::hal::{
 
 use os::hardware::Hardware;
 
+static mut CORE1_STACK: Stack<4096> = Stack::new();
+
 #[entry]
 fn main() -> ! {
 	info!("Program start");
 	let mut pac = pac::Peripherals::take().unwrap();
 	let mut watchdog = Watchdog::new(pac.WATCHDOG);
-	let sio = Sio::new(pac.SIO);
+	let mut sio = Sio::new(pac.SIO);
 
 	let external_xtal_freq_hz = 12_000_000u32;
 	let clocks = init_clocks_and_plls(
@@ -87,22 +96,31 @@ fn main() -> ! {
 
 	let display = hardware::Display::new(eink_spidev, eink_busy, eink_dc, eink_rst, timer);
 
-	let keypad = Keypad::new(
-		[
+	let keypad_pins = KeypadPins {
+		columns: [
 			pins.gpio22.into_pull_down_input().into_dyn_pin(),
 			pins.gpio21.into_pull_down_input().into_dyn_pin(),
 			pins.gpio20.into_pull_down_input().into_dyn_pin(),
 			pins.gpio19.into_pull_down_input().into_dyn_pin(),
 			pins.gpio18.into_pull_down_input().into_dyn_pin(),
 		],
-		[
+		rows: [
 			pins.gpio14.into_push_pull_output().into_dyn_pin(),
 			pins.gpio15.into_push_pull_output().into_dyn_pin(),
 			pins.gpio16.into_push_pull_output().into_dyn_pin(),
 			pins.gpio17.into_push_pull_output().into_dyn_pin(),
 		],
-		timer,
-	);
+	};
+
+	let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
+	let cores = mc.cores();
+	let secondary_core = &mut cores[1];
+	#[allow(static_mut_refs)] // multicore is unsound. literally.
+	let _ = secondary_core.spawn(unsafe { &mut CORE1_STACK.mem }, move || {
+		input_thread::run(keypad_pins, timer);
+	});
+
+	let keypad = Keypad::new(sio.fifo, timer);
 
 	let hw = Hardware {
 		display,

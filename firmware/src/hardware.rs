@@ -1,4 +1,5 @@
 use core::convert::Infallible;
+use defmt::debug;
 use embedded_graphics::{
 	draw_target::DrawTarget, geometry::Dimensions, primitives::Rectangle, Pixel,
 };
@@ -10,14 +11,12 @@ use embedded_hal::{
 use epd_waveshare::{
 	color::Color,
 	epd2in9_v2::{Display2in9, Epd2in9},
-	prelude::{DisplayRotation, WaveshareDisplay},
+	prelude::{DisplayRotation, QuickRefresh, WaveshareDisplay},
 };
 use os::hardware::{DisplayDriver, Key, KeypadDriver, SystemDriver};
-use rp_pico::hal::{
-	gpio::{DynPinId, FunctionSioInput, FunctionSioOutput, Pin, PullDown},
-	timer::Instant,
-	Timer,
-};
+use rp_pico::hal::{sio::SioFifo, Timer};
+
+use crate::config::{KEYPAD_COLS, KEYPAD_ROWS};
 
 // DISPLAY
 
@@ -77,78 +76,56 @@ where
 {
 	fn update(&mut self) {
 		self.epd
+			.update_and_display_new_frame(&mut self.spi, self.fb.buffer(), &mut self.delay)
+			.unwrap();
+	}
+
+	fn refresh(&mut self) {
+		self.epd
 			.update_and_display_frame(&mut self.spi, self.fb.buffer(), &mut self.delay)
 			.unwrap();
+		self.update();
 	}
 }
 
 // KEYPAD
 
-const DEBOUNCE_TIME_MS: u64 = 50;
-const ROWS: usize = 4;
-const COLS: usize = 5;
-
 pub(crate) struct Keypad {
-	columns: [Pin<DynPinId, FunctionSioInput, PullDown>; COLS],
-	rows: [Pin<DynPinId, FunctionSioOutput, PullDown>; ROWS],
+	fifo: SioFifo,
 	timer: Timer,
-	last_pressed: [[Instant; COLS]; ROWS],
 }
 
 impl KeypadDriver for Keypad {
-	fn read_key(&mut self, timeout_ms: u64) -> Option<Key> {
+	fn read_key(&mut self) -> Option<Key> {
 		use Key::*;
-		const KEYMAP: [[Key; COLS]; ROWS] = [
+		const KEYMAP: [[Key; KEYPAD_COLS]; KEYPAD_ROWS] = [
 			[D7, D8, D9, Backspace, Dot],
 			[D4, D5, D6, Add, Sub],
 			[D1, D2, D3, Mul, Div],
 			[Left, D0, Right, Eq, Fn],
 		];
 
+		let msg = self.fifo.read()?;
+		let row = msg as usize >> 16;
+		let column = msg as usize & 0xFFFF;
+		debug!("key pressed: {:x} (row: {}, col: {})", msg, row, column);
+		Some(KEYMAP[row][column])
+	}
+
+	fn wait_for_key(&mut self, timeout_ms: u64) -> bool {
 		let start = self.timer.get_counter();
-
-		loop {
-			for (i_row, row) in self.rows.iter_mut().enumerate() {
-				row.set_high().unwrap();
-				for (i_col, column) in self.columns.iter_mut().enumerate() {
-					let now = self.timer.get_counter();
-
-					if column.is_high().unwrap() {
-						let since_pressed = now - self.last_pressed[i_row][i_col];
-						self.last_pressed[i_row][i_col] = now;
-
-						if since_pressed.to_millis() < DEBOUNCE_TIME_MS {
-							continue;
-						}
-
-						row.set_low().unwrap();
-						return Some(KEYMAP[i_row][i_col]);
-					}
-				}
-				row.set_low().unwrap();
-			}
-
-			if (self.timer.get_counter() - start).to_millis() > timeout_ms {
-				return None;
+		while (self.timer.get_counter() - start).to_millis() < timeout_ms {
+			if self.fifo.is_read_ready() {
+				return true;
 			}
 		}
+		false
 	}
 }
 
 impl Keypad {
-	pub(crate) fn new(
-		columns: [Pin<DynPinId, FunctionSioInput, PullDown>; COLS],
-		rows: [Pin<DynPinId, FunctionSioOutput, PullDown>; ROWS],
-		timer: Timer,
-	) -> Self {
-		let now = timer.get_counter();
-
-		Self {
-			columns,
-			rows,
-			timer,
-			last_pressed: [[now; COLS]; ROWS],
-		}
+	pub(crate) fn new(fifo: SioFifo, timer: Timer) -> Self {
+		Self { fifo, timer }
 	}
 }
 
@@ -161,7 +138,7 @@ pub(crate) struct System;
 
 impl SystemDriver for System {
 	fn memory_used(&mut self) -> u64 {
-		RAM_BEGIN - cortex_m::register::msp::read() as u64
+		RAM_BEGIN - u64::from(cortex_m::register::msp::read())
 	}
 
 	fn memory_total(&mut self) -> u64 {
