@@ -97,6 +97,7 @@ pub(crate) struct Keypad {
 
 impl KeypadDriver for Keypad {
 	fn read_key(&mut self) -> Option<Key> {
+		#[allow(clippy::enum_glob_use)]
 		use Key::*;
 		const KEYMAP: [[Key; KEYPAD_COLS]; KEYPAD_ROWS] = [
 			[D7, D8, D9, Backspace, Dot],
@@ -143,5 +144,9 @@ impl SystemDriver for System {
 
 	fn memory_total(&mut self) -> u64 {
 		RAM_BEGIN - RAM_END
+	}
+
+	fn battery_level(&mut self) -> u8 {
+		todo!()
 	}
 }

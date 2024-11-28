@@ -6,9 +6,7 @@ mod hardware;
 mod input_thread;
 
 use bsp::entry;
-use defmt::info;
 use defmt_rtt as _;
-use embedded_hal::digital::OutputPin;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use hardware::Keypad;
 use input_thread::KeypadPins;
@@ -18,8 +16,9 @@ use rp_pico::{
 	self as bsp,
 	hal::{
 		self,
+		adc::AdcPin,
 		multicore::{Multicore, Stack},
-		Timer,
+		Adc, Timer,
 	},
 };
 
@@ -37,7 +36,6 @@ static mut CORE1_STACK: Stack<4096> = Stack::new();
 
 #[entry]
 fn main() -> ! {
-	info!("Program start");
 	let mut pac = pac::Peripherals::take().unwrap();
 	let mut watchdog = Watchdog::new(pac.WATCHDOG);
 	let mut sio = Sio::new(pac.SIO);
@@ -61,7 +59,12 @@ fn main() -> ! {
 		&mut pac.RESETS,
 	);
 
+	// POWER LED
+
+	#[cfg(feature = "powerled")]
 	pins.led.into_push_pull_output().set_high().unwrap();
+
+	// EINK
 
 	let eink_mosi = pins.gpio11.into_function::<hal::gpio::FunctionSpi>();
 	let eink_sclk = pins.gpio10.into_function::<hal::gpio::FunctionSpi>();
@@ -96,6 +99,8 @@ fn main() -> ! {
 
 	let display = hardware::Display::new(eink_spidev, eink_busy, eink_dc, eink_rst, timer);
 
+	// KEYPAD
+
 	let keypad_pins = KeypadPins {
 		columns: [
 			pins.gpio22.into_pull_down_input().into_dyn_pin(),
@@ -121,6 +126,32 @@ fn main() -> ! {
 	});
 
 	let keypad = Keypad::new(sio.fifo, timer);
+
+	// BATTERY
+
+	let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
+	let mut adc_pin_battery = AdcPin::new(pins.gpio28.into_floating_input()).unwrap();
+	let mut _adc_fifo = adc
+		.build_fifo()
+		.clock_divider(0xFFFF, 0)
+		.set_channel(&mut adc_pin_battery)
+		.start_paused();
+	// loop {
+	// 	adc_fifo.resume();
+	// 	let mut counts_sum = 0u32;
+	// 	for _ in 0..1648000 {
+	// 		counts_sum += adc_fifo.read() as u32;
+	// 	}
+	// 	adc_fifo.pause();
+	// 	adc_fifo.clear();
+	// 	let avg_counts = counts_sum / 1648000;
+	// 	defmt::debug!(
+	// 		"avgcounts: {}, percentage: {}%",
+	// 		avg_counts,
+	// 		(avg_counts - 1862) * 100 / 744
+	// 	);
+	// 	timer.delay_ms(10000);
+	// }
 
 	let hw = Hardware {
 		display,

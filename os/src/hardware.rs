@@ -49,4 +49,5 @@ pub trait DisplayDriver: DrawTarget<Color = Color> {
 pub trait SystemDriver {
 	fn memory_used(&mut self) -> u64;
 	fn memory_total(&mut self) -> u64;
+	fn battery_level(&mut self) -> u8;
 }

@@ -94,6 +94,10 @@ impl SystemDriver for System {
 	fn memory_total(&mut self) -> u64 {
 		FAKEMEM_TOTAL
 	}
+
+	fn battery_level(&mut self) -> u8 {
+		thread_rng().gen_range(1..100)
+	}
 }
 
 fn main() {
